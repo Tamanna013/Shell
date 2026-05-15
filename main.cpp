@@ -5,6 +5,8 @@
 #include<sstream>
 #include<sys/wait.h>
 #include<vector>
+#include <fstream>
+#include <string>
 
 using namespace std;
 namespace fs=filesystem;
@@ -13,6 +15,7 @@ bool isExecutable(const std::string& filepath) {
     //access() returns 0 on success (has permission), -1 on failure
     return access(filepath.c_str(), X_OK) == 0;
 }
+
 int main() {
   //flush after every std::cout/std:cerr
   cout<<unitbuf;
@@ -24,7 +27,88 @@ int main() {
     getline(cin, input);
     if(input=="exit") break;
     if(input.substr(0, 5)=="echo "){
-      cout<<input.substr(5)<<endl;
+      if(input[5]=='\''){
+        int count=1;
+        for(int i=6;i<input.length();i++){
+          if(input[i]=='\'' && (++count)%2==0){
+            while(i<input.length() && input[i]==' ') i++;
+          }
+          else if(input[i]=='\'' && count%2==1){
+            //do nothing, just skip the quote
+          }
+          else cout<<input[i];
+        }
+        cout<<endl;
+      }
+      else if(input[5]=='\"'){
+        int count=1;
+        for(int i=6;i<input.length();){
+          if(input[i]=='\"' && (++count)%2==0){
+            i++;
+            while(i<input.length() && input[i]==' ') i++;
+            i--;
+          }
+          else if(input[i]=='\"' && count%2==1){
+            i++;
+            //do nothing, just skip the double quote
+          }
+          else{
+            cout<<input[i];
+            i++;
+          }
+        }
+        cout<<endl;
+      }
+      else{
+        for(int i=5;i<input.length();i++){
+          if(input[i]==' '){
+            cout<<' ';
+            while(i<input.length() && input[i]==' ') i++;
+            i--;
+          }
+          else cout<<input[i];
+        }
+        cout<<endl;
+      }
+    }
+    else if(input.substr(0, 4)=="cat "){
+      string filename="";
+      for(int i=5;i<input.length();i++){
+        if(input[i]=='\''){
+          if(!filename.empty()){
+            ifstream file(filename);
+            if(file.is_open()){
+              string line;
+              while(getline(file, line)){
+                cout<<line;
+              }
+              file.close();
+            }
+            else cerr<<"cat: "<<filename<<": No such file or directory"<<endl;
+          }
+          filename="";
+          i++;
+          while(i<input.length() && input[i]!='\'') i++;
+        }
+        else if(input[i]=='\"'){
+
+        }
+        else{
+          filename+=input[i];
+        }
+      }
+      if(!filename.empty()){
+        ifstream file(filename);
+        if(file.is_open()){
+          string line;
+          while(getline(file, line)){
+            cout<<line;
+          }
+          file.close();
+        }
+        else cerr<<"cat: "<<filename<<": No such file or directory"<<endl;
+      }
+      cout<<endl;
     }
     else if(input=="pwd"){
       cout<<fs::current_path().string()<<endl;
