@@ -26,6 +26,19 @@ int main() {
     if(input.substr(0, 5)=="echo "){
       cout<<input.substr(5)<<endl;
     }
+    else if(input=="pwd"){
+      cout<<fs::current_path().string()<<endl;
+    }
+    else if(input.substr(0, 3)=="cd "){
+      fs::path PATH=input.substr(3);
+      if(PATH=="~") PATH=fs::path(getenv("HOME"));
+      try{
+        fs::current_path(PATH);
+      }
+      catch(const fs::filesystem_error& e){
+        cerr<<input.substr(0, 2)<<": "<<input.substr(3)<<": No such file or directory"<<endl;
+      }
+    }
     else if(input.substr(0, 5)=="type "){
       string cmd=input.substr(5);
       if(cmd=="echo"){
@@ -36,6 +49,12 @@ int main() {
       }
       else if(cmd=="exit"){
         cout<<"exit is a shell builtin"<<endl;
+      }
+      else if(cmd=="pwd"){
+        cout<<"pwd is a shell builtin"<<endl;
+      }
+      else if(cmd=="cd"){
+        cout<<"cd is a shell builtin"<<endl;
       }
       else if(filesystem::exists("/bin/"+cmd) && !isExecutable("/bin/"+cmd)){
         //skip non-executable files
