@@ -91,7 +91,20 @@ int main() {
           while(i<input.length() && input[i]!='\'') i++;
         }
         else if(input[i]=='\"'){
-
+          if(!filename.empty()){
+            ifstream file(filename);
+            if(file.is_open()){
+              string line;
+              while(getline(file, line)){
+                cout<<line;
+              }
+              file.close();
+            }
+            else cerr<<"cat: "<<filename<<": No such file or directory"<<endl;
+          }
+          filename="";
+          i++;
+          while(i<input.length() && input[i]!='\"') i++;
         }
         else{
           filename+=input[i];
