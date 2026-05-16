@@ -74,6 +74,11 @@ int main() {
             i++;
             cout<<input[i];
           }
+          else if(input[i]=='\\' && input[i+1]=='\"'){
+            i++;
+            cout<<input[i];
+            i++;
+          }
           else cout<<input[i++];
         }
         cout<<endl;
@@ -195,6 +200,106 @@ int main() {
         if(!found){
           cout<<cmd<<": not found"<<endl;
         }
+      }
+    }
+    else if(input[0]=='\''){
+      pid_t pid=fork();
+      int pos=input.substr(1).find('\'')+1;
+      string filename=input.substr(1, pos-1);
+      string newfilename="";
+      for(int i=0;i<filename.length();i++){
+        if(filename[i]=='\\' && i+1<filename.length() && filename[i+1]=='\\'){
+          newfilename+='\\';
+          i++;
+        }
+        else newfilename+=filename[i];
+      }
+      filename=newfilename;
+      ifstream file(filename);
+      vector<string> args;
+      vector<char*> argsStr;
+      stringstream ss(input.substr(pos+1));
+      string word;
+      while(getline(ss, word, ' ')){
+        int wordPos=word.find('\\');
+        if(wordPos!=-1 && word[wordPos+1]=='\\'){
+          string newWord="";
+          for(int i=0;i<word.length();i++){
+            if(word[i]=='\\' && i+1<word.length() && word[i+1]=='\\'){
+              newWord+='\\';
+              i++;
+            }
+            else newWord+=word[i];
+          }
+          word=newWord;
+        }
+        args.push_back(word);
+      }
+      for(size_t i=0;i<args.size();i++){
+        argsStr.push_back(const_cast<char*>(args[i].c_str()));
+      }
+      argsStr.push_back(nullptr);
+      if(pid==0){
+        execvp(filename.c_str(), argsStr.data());
+        cout<<filename<<": file not found"<<endl;
+        exit(1);
+      }
+      else if(pid>0){
+        int status;
+        waitpid(pid, &status, 0);
+      }
+      else{
+        cerr<<"Failed to fork"<<endl;
+      }
+    }
+    else if(input[0]=='\"'){
+      pid_t pid=fork();
+      int pos=input.substr(1).find('\"')+1;
+      string filename=input.substr(1, pos-1);
+      string newfilename="";
+      for(int i=0;i<filename.length();i++){
+        if(filename[i]=='\\' && i+1<filename.length() && filename[i+1]=='\\'){
+          newfilename+='\\';
+          i++;
+        }
+        else newfilename+=filename[i];
+      }
+      filename=newfilename;
+      ifstream file(filename);
+      vector<string> args;
+      vector<char*> argsStr;
+      stringstream ss(input.substr(pos+1));
+      string word;
+      while(getline(ss, word, ' ')){
+        int wordPos=word.find('\\');
+        if(wordPos!=-1 && word[wordPos+1]=='\\'){
+          string newWord="";
+          for(int i=0;i<word.length();i++){
+            if(word[i]=='\\' && i+1<word.length() && word[i+1]=='\\'){
+              newWord+=word[i];
+              i++;
+            }
+            else newWord+=word[i];
+          }
+          word=newWord;
+        }
+        args.push_back(word);
+      }
+      for(size_t i=0;i<args.size();i++){
+        argsStr.push_back(const_cast<char*>(args[i].c_str()));
+      }
+      argsStr.push_back(nullptr);
+      if(pid==0){
+        execvp(filename.c_str(), argsStr.data());
+        cout<<filename<<": file not found"<<endl;
+        exit(1);
+      }
+      else if(pid>0){
+        int status;
+        waitpid(pid, &status, 0);
+      }
+      else{
+        cerr<<"Failed to fork"<<endl;
       }
     }
     else{
