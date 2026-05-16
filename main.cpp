@@ -36,6 +36,13 @@ int main() {
           else if(input[i]=='\'' && count%2==1){
             //do nothing, just skip the quote
           }
+          else if(input[i]=='\\'){
+            i++;
+            if(i<input.length()){
+              cout<<input[i];
+              i++;
+            }
+          }
           else cout<<input[i];
         }
         cout<<endl;
@@ -52,45 +59,47 @@ int main() {
             i++;
             //do nothing, just skip the double quote
           }
-          else{
-            cout<<input[i];
+          else if(input[i]=='\\'){
             i++;
+            if(i<input.length()){
+              cout<<input[i];
+              i++;
+            }
           }
         }
         cout<<endl;
       }
       else{
-        for(int i=5;i<input.length();i++){
-          if(input[i]==' '){
+        for(int i=5;i<input.length();){
+          if(input[i]=='\\'){
+            i++;
+            if(i<input.length()){
+              cout<<input[i];
+            }
+          }
+          else if(input[i]==' '){
             cout<<' ';
             while(i<input.length() && input[i]==' ') i++;
             i--;
           }
           else cout<<input[i];
+          i++;
         }
         cout<<endl;
       }
     }
     else if(input.substr(0, 4)=="cat "){
       string filename="";
-      for(int i=5;i<input.length();i++){
-        if(input[i]=='\''){
-          if(!filename.empty()){
-            ifstream file(filename);
-            if(file.is_open()){
-              string line;
-              while(getline(file, line)){
-                cout<<line;
-              }
-              file.close();
-            }
-            else cerr<<"cat: "<<filename<<": No such file or directory"<<endl;
-          }
-          filename="";
-          i++;
-          while(i<input.length() && input[i]!='\'') i++;
+      bool inSingleQuote = false;
+      bool inDoubleQuote = false;
+      for(int i=4;i<input.length();i++){
+        if(input[i]=='\'' && !inDoubleQuote){
+          inSingleQuote=!inSingleQuote;
         }
-        else if(input[i]=='\"'){
+        else if(input[i]=='\"' && !inSingleQuote){
+          inDoubleQuote=!inDoubleQuote;
+        }
+        else if(input[i]==' ' && !inSingleQuote && !inDoubleQuote){
           if(!filename.empty()){
             ifstream file(filename);
             if(file.is_open()){
@@ -103,8 +112,9 @@ int main() {
             else cerr<<"cat: "<<filename<<": No such file or directory"<<endl;
           }
           filename="";
-          i++;
-          while(i<input.length() && input[i]!='\"') i++;
+        }
+        else if(input[i]=='\\'){
+          //do nothing, just skip the backslash and treat the next character as a normal character
         }
         else{
           filename+=input[i];
