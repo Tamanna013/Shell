@@ -5,8 +5,11 @@
 #include<sstream>
 #include<sys/wait.h>
 #include<vector>
-#include <fstream>
-#include <string>
+#include<fstream>
+#include<string>
+#include<fcntl.h>
+#include<algorithm>
+#include<cstdlib>
 
 using namespace std;
 namespace fs=filesystem;
@@ -27,7 +30,7 @@ int main() {
     getline(cin, input);
     if(input=="exit") break;
     if(input.substr(0, 5)=="echo "){
-      if(input[5]=='\''){
+      if(input[5]=='\'' && input.find('>')==string::npos){
         int count=1;
         for(int i=6;i<input.length();i++){
           if(input[i]=='\'' && (++count)%2==0){
@@ -51,7 +54,7 @@ int main() {
         }
         cout<<endl;
       }
-      else if(input[5]=='\"'){
+      else if(input[5]=='\"' && input.find('>')==string::npos){
         int count=1;
         for(int i=6;i<input.length();){
           if(input[i]=='\"' && (++count)%2==0){
@@ -83,6 +86,17 @@ int main() {
         }
         cout<<endl;
       }
+      else if(input.find('>')!=string::npos){
+        int pos=input.find('>');
+        if(input[pos-1]=='1') input.erase(pos-1, 1);
+        string filename=input.substr(pos+1);
+        string text=input.substr(5, pos-6);
+        ofstream file(filename);
+        if(file.is_open()){
+          file<<text;
+          file.close();
+        }
+      }
       else{
         for(int i=5;i<input.length();){
           if(input[i]=='\\'){
@@ -103,6 +117,38 @@ int main() {
       }
     }
     else if(input.substr(0, 4)=="cat "){
+      if(input.find('>')!=string::npos){
+        int pos=input.find('>');
+        if(input[pos-1]=='1') input.erase(pos-1, 1);
+        pos=pos-1;
+        string filename="";
+        vector<string> filenames;
+        for(int i=4;i<pos;i++){
+          if(input[i]==' '){
+            if(!filename.empty()){
+              filenames.push_back(filename);
+            }
+            filename="";
+          }
+          else filename+=input[i];
+        }
+        ofstream file(input.substr(pos+2));
+        sort(filenames.begin(), filenames.end());
+        for(string& fname: filenames){
+          ifstream inFile(fname);
+          if(inFile.is_open()){
+            string line;
+            while(getline(inFile, line)){
+              file<<line;
+              if(!inFile.eof() && fname!=filenames.back()) file<<endl;
+              else if(fname==filenames.back()) cout<<line;
+            }
+            inFile.close();
+          }
+          else cerr<<"cat: "<<fname<<": No such file or directory"<<endl;
+        }
+        continue;
+      }
       string filename="";
       bool inSingleQuote = false;
       bool inDoubleQuote = false;
@@ -120,10 +166,10 @@ int main() {
               string line;
               while(getline(file, line)){
                 cout<<line;
+                if(!file.eof()) cout<<endl;
               }
               file.close();
             }
-            else cerr<<"cat: "<<filename<<": No such file or directory"<<endl;
           }
           filename="";
         }
@@ -143,10 +189,10 @@ int main() {
           string line;
           while(getline(file, line)){
             cout<<line;
+            if(!file.eof()) cout<<endl;
           }
           file.close();
         }
-        else cerr<<"cat: "<<filename<<": No such file or directory"<<endl;
       }
       cout<<endl;
     }
@@ -163,6 +209,47 @@ int main() {
         cerr<<input.substr(0, 2)<<": "<<input.substr(3)<<": No such file or directory"<<endl;
       }
     }
+    else if(input=="ls"){
+      // Loop through everything inside the present working directory
+      // fs::current_path() gets the active folder path
+      for (const auto& entry : fs::directory_iterator(fs::current_path())) {
+        // entry.path().filename() isolates just the file name from the full path
+        std::cout << entry.path().filename().string() << std::endl;
+      }
+    }
+    else if(input.substr(0, 5)=="ls -1"){
+      string filename="";
+      int i=5;
+      while(input[i]!='>' && i<input.length()){
+        if(input[i]!=' ') filename+=input[i++];
+        else i++;
+      }
+      string text="";
+      vector<string> files;
+      // Collect all filenames
+      for(const auto& entry : fs::directory_iterator(filename)){
+        files.push_back(entry.path().filename().string());
+      }
+  
+      // Sort alphabetically
+      sort(files.begin(), files.end());
+  
+      // Build the text with newlines
+      for(const auto& file : files){
+        text += file + "\n";
+      }
+      text.pop_back(); // Remove the last newline
+      int pos=input.find('>');
+      if(pos!=string::npos){
+        string newfilename=input.substr(pos+2);
+        ofstream newfile(newfilename);
+        if(newfile.is_open()){
+          newfile<<text;
+          newfile.close();
+        }
+      }
+      else cout<<text;
+    }
     else if(input.substr(0, 5)=="type "){
       string cmd=input.substr(5);
       if(cmd=="echo"){
@@ -177,8 +264,14 @@ int main() {
       else if(cmd=="pwd"){
         cout<<"pwd is a shell builtin"<<endl;
       }
+      else if(cmd=="cat"){
+        cout<<"cat is a shell builtin"<<endl;
+      }
       else if(cmd=="cd"){
         cout<<"cd is a shell builtin"<<endl;
+      }
+      else if(cmd=="ls"){
+        cout<<"ls is a shell builtin"<<endl;
       }
       else if(filesystem::exists("/bin/"+cmd) && !isExecutable("/bin/"+cmd)){
         //skip non-executable files
