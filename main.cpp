@@ -34,14 +34,18 @@ int main() {
             while(i<input.length() && input[i]==' ') i++;
           }
           else if(input[i]=='\'' && count%2==1){
-            //do nothing, just skip the quote
+            
           }
-          else if(input[i]=='\\'){
+          else if(input[i]=='\\' && input[i+1]=='\\'){
             i++;
             if(i<input.length()){
               cout<<input[i];
-              i++;
             }
+          }
+          else if(input[i]=='\\' && input[i+1]=='\"'){
+            cout<<input[i];
+            i++;
+            cout<<input[i];
           }
           else cout<<input[i];
         }
@@ -57,15 +61,20 @@ int main() {
           }
           else if(input[i]=='\"' && count%2==1){
             i++;
-            //do nothing, just skip the double quote
           }
-          else if(input[i]=='\\'){
+          else if(input[i]=='\\' && input[i+1]=='\\'){
             i++;
             if(i<input.length()){
               cout<<input[i];
-              i++;
             }
+            i++;
           }
+          else if(input[i]=='\\' && input[i+1]=='\''){
+            cout<<input[i];
+            i++;
+            cout<<input[i];
+          }
+          else cout<<input[i++];
         }
         cout<<endl;
       }
@@ -113,8 +122,11 @@ int main() {
           }
           filename="";
         }
-        else if(input[i]=='\\'){
-          //do nothing, just skip the backslash and treat the next character as a normal character
+        else if(input[i]=='\\' && !inSingleQuote){
+          i++;
+          if(i<input.length()){
+            filename+=input[i];
+          }
         }
         else{
           filename+=input[i];
