@@ -132,26 +132,32 @@ int main() {
           }
           else filename+=input[i];
         }
+        if(!filename.empty()){
+          filenames.push_back(filename);
+        }
         ofstream file(input.substr(pos+2));
         sort(filenames.begin(), filenames.end());
         for(string& fname: filenames){
           ifstream inFile(fname);
           if(inFile.is_open()){
             string line;
+            bool firstLine=true;
             while(getline(inFile, line)){
-              file<<line;
-              if(!inFile.eof() && fname!=filenames.back()) file<<endl;
-              else if(fname==filenames.back()) cout<<line;
+              if(!firstLine) file<<endl;
+              file<<line<<endl;
+              firstLine=false;
             }
             inFile.close();
           }
           else cerr<<"cat: "<<fname<<": No such file or directory"<<endl;
         }
+        file.close();
         continue;
       }
       string filename="";
       bool inSingleQuote = false;
       bool inDoubleQuote = false;
+      string allContent="";
       for(int i=4;i<input.length();i++){
         if(input[i]=='\'' && !inDoubleQuote){
           inSingleQuote=!inSingleQuote;
@@ -163,13 +169,11 @@ int main() {
           if(!filename.empty()){
             ifstream file(filename);
             if(file.is_open()){
-              string line;
-              while(getline(file, line)){
-                cout<<line;
-                if(!file.eof()) cout<<endl;
-              }
+              string content((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
+              allContent+=content;
               file.close();
             }
+            else cerr<<"cat: "<<filename<<": No such file or directory"<<endl;
           }
           filename="";
         }
@@ -186,15 +190,21 @@ int main() {
       if(!filename.empty()){
         ifstream file(filename);
         if(file.is_open()){
-          string line;
-          while(getline(file, line)){
-            cout<<line;
-            if(!file.eof()) cout<<endl;
-          }
+          // This reads the entire file into a string at once.
+          // istreambuf_iterator<char>(file) → start of the file
+          // istreambuf_iterator<char>() → end of the file (empty = "end" marker)
+          // So it's basically saying: "make a string from start to end of file"
+          // Instead of reading line by line with getline, this just slurps everything in one go.
+          string content((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
+          allContent+=content;
           file.close();
         }
+        else cerr<<"cat: "<<filename<<": No such file or directory"<<endl;
       }
-      cout<<endl;
+      cout<<allContent;
+      if(!allContent.empty() && allContent.back()!='\n'){
+        cout<<endl;
+      }
     }
     else if(input=="pwd"){
       cout<<fs::current_path().string()<<endl;
@@ -226,6 +236,7 @@ int main() {
       }
       string text="";
       vector<string> files;
+      
       // Collect all filenames
       for(const auto& entry : fs::directory_iterator(filename)){
         files.push_back(entry.path().filename().string());
@@ -236,9 +247,9 @@ int main() {
   
       // Build the text with newlines
       for(const auto& file : files){
-        text += file + "\n";
+        if(file!=files.back()) text += file + "\n";
+        else text += file;
       }
-      text.pop_back(); // Remove the last newline
       int pos=input.find('>');
       if(pos!=string::npos){
         string newfilename=input.substr(pos+2);
@@ -247,8 +258,12 @@ int main() {
           newfile<<text;
           newfile.close();
         }
+        else cerr<<"ls: "<<newfilename<<": No such file or directory"<<endl;
       }
-      else cout<<text;
+      else{
+        if(!text.empty()) text.pop_back();
+        cout << text;
+      }
     }
     else if(input.substr(0, 5)=="type "){
       string cmd=input.substr(5);
@@ -265,7 +280,7 @@ int main() {
         cout<<"pwd is a shell builtin"<<endl;
       }
       else if(cmd=="cat"){
-        cout<<"cat is a shell builtin"<<endl;
+        cout<<"cat is /usr/bin/cat"<<endl;
       }
       else if(cmd=="cd"){
         cout<<"cd is a shell builtin"<<endl;
