@@ -10,13 +10,208 @@
 #include<fcntl.h>
 #include<algorithm>
 #include<cstdlib>
+#include<termios.h> 
 
 using namespace std;
 namespace fs=filesystem;
 
+struct termios orig; // we'll store the original terminal settings here so we can restore them when we're done
+
+bool pastTab=false; // to track if the user presses tab key twice
+
 bool isExecutable(const std::string& filepath) {
     //access() returns 0 on success (has permission), -1 on failure
     return access(filepath.c_str(), X_OK) == 0;
+}
+
+void enableRawMode(){
+  // tcgetattr reads the current terminal settings into 'orig'
+  // STDIN_FILENO = 0 = standard input (keyboard)
+  tcgetattr(STDIN_FILENO, &orig);
+
+  struct termios raw = orig; // copy original settings so we can modify them
+
+  // c_lflag = "local flags" — controls how the terminal processes input
+  // ICANON = canonical mode (line buffering) — normally terminal waits
+  //          for Enter before sending input to your program. We turn this OFF
+  //          so every keypress is sent immediately.
+  // ECHO   = automatically prints what the user types. We turn this OFF
+  //          so we can control what gets printed ourselves.
+  // ~(ECHO | ICANON) means: turn OFF both ECHO and ICANON bits
+  raw.c_lflag &= ~(ECHO | ICANON);
+
+  // c_cc = control characters array
+  // VMIN  = minimum number of bytes read() should wait for before returning
+  //         setting it to 1 means: return as soon as 1 character is available
+  raw.c_cc[VMIN] = 1;
+
+  // VTIME = timeout for read() in tenths of a second
+  //         setting it to 0 means: no timeout, wait indefinitely
+  raw.c_cc[VTIME] = 0;
+
+  // tcsetattr applies our new settings
+  // TCSAFLUSH = apply after flushing (clearing) any pending input
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+void disableRawMode(){
+  // restore the original terminal settings
+  // IMPORTANT: always call this before your program exits!
+  // if you don't, the terminal stays in raw mode and looks broken
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig);
+}
+
+vector<string> matches;
+
+string checkIfTabComplete(string input){
+  vector<string> commands={"echo", "cat", "pwd", "cd", "ls", "type", "exit"};
+  char* currPATH=getenv("PATH");
+  if(currPATH){
+    string path_str(currPATH); //path_str converts the raw char* into a proper C++ string so we can work with it easily
+    string dir;
+    matches.clear();
+    stringstream ss(path_str);
+    // getline(ss, dir, ':') reads from ss until it hits a : character, puts that chunk into dir, and returns true if it successfully read something. So if PATH is /usr/bin:/bin:/usr/local/bin, the three iterations give:
+    // dir = "/usr/bin"
+    // dir = "/bin"
+    // dir = "/usr/local/bin"
+    while(getline(ss, dir, ':')){
+      for(const auto& entry:fs::directory_iterator(dir)){
+        string path=entry.path().filename().string();
+        if(path.substr(0, input.length())==input && isExecutable(dir+"/"+path)) matches.push_back(path);
+      }
+    }
+  }
+  for(int i=0;i<commands.size();i++){
+    if(commands[i].substr(0, input.length())==input){
+      matches.push_back(commands[i]);
+    }
+  }
+  sort(matches.begin(), matches.end());
+  matches.erase(unique(matches.begin(), matches.end()), matches.end());
+  if(matches.size()==1){
+    return matches[0];
+  }
+  else{
+    cout<<'\a'<<endl;
+  }
+  return input;
+}
+
+void handleTwoTabs(const string& input){
+  for(auto match:matches){
+    cout<<match<<" ";
+  }
+  cout<<"\n$ "<<input;
+  matches.clear();
+  cout<<endl;
+}
+
+string readInput(){
+  string input="";
+  char c;
+  while(true){
+    read(STDIN_FILENO, &c, 1); // read 1 byte from standard input into variable c, in raw mode this returns immediately when a key is pressed
+    if(c=='\n'){
+      cout<<endl;
+      break;
+    }
+    // ── BACKSPACE ──
+    // backspace sends ASCII 127 (DEL) on most terminals
+    // some older terminals send ASCII 8 (\b) instead
+    else if(c == 127 || c == 8){
+      if(!input.empty()){
+        input.pop_back(); // remove last character from our string
+
+        // "\b \b" is the trick to visually erase a character:
+        // \b = move cursor left one space
+        // ' ' = print a space (overwrites the character)
+        // \b = move cursor left again (so cursor is in right place)
+        cout << "\b \b";
+        cout.flush(); // make sure it shows immediately
+      }
+    }
+
+    // ── ARROW KEYS & SPECIAL KEYS ──
+    // special keys send ESCAPE SEQUENCES: 3 bytes starting with \x1b (ESC)
+    // format: ESC [ X  where X is a letter
+    // left arrow  = ESC [ D
+    // right arrow = ESC [ C
+    // up arrow    = ESC [ A  (used for command history)
+    // down arrow  = ESC [ B  (used for command history)
+    else if(c == '\x1b'){
+      char seq[2];
+      read(STDIN_FILENO, &seq[0], 1); // read '[' 
+      read(STDIN_FILENO, &seq[1], 1); // read 'A', 'B', 'C', or 'D'
+
+      if(seq[0] == '['){
+        if(seq[1] == 'A'){
+          // UP arrow — for command history (not implemented here)
+          // you would load the previous command into input
+        }
+        else if(seq[1] == 'B'){
+          // DOWN arrow — for command history (not implemented here)
+        }
+        else if(seq[1] == 'C'){
+          // RIGHT arrow — move cursor right
+          // (would need to track cursor position to implement properly)
+        }
+        else if(seq[1] == 'D'){
+          // LEFT arrow — move cursor left
+        }
+      }
+    }
+
+    // ── CTRL+C ──
+    // sends ASCII 3 (ETX = end of text)
+    else if(c == 3){
+      cout << "^C\n";
+      input = ""; // clear input
+      break;
+    }
+
+    // ── CTRL+D ──
+    // sends ASCII 4 (EOT = end of transmission)
+    // in a shell this usually means "exit"
+    else if(c == 4){
+      cout << '\n';
+      disableRawMode();
+      exit(0);
+    }
+
+    // ── TAB KEY ──
+    else if(c=='\t' && pastTab){
+      handleTwoTabs(input);
+      cout<<"$ "<<input;
+      pastTab=false;
+    }
+    else if(c=='\t'){
+      string newInput=checkIfTabComplete(input);
+      if(input!=newInput){
+        // erase current input
+        for(int i=0;i<input.length();i++){
+          cout << "\b \b";
+        }
+        cout<<newInput<<' ';
+        cout.flush();
+        input=newInput+' ';
+        pastTab=true;
+      }
+      else{
+        pastTab=true;
+        // no match or multiple matches - ring bell
+        cout<<'\a'; // \a is the ASCII Bell character, which makes the terminal beep
+        cout.flush();
+      }
+    }
+
+    else{
+      input+=c;
+      cout<<c;
+      cout.flush();
+    }
+  }
+  return input;
 }
 
 int main() {
@@ -24,11 +219,13 @@ int main() {
   cout<<unitbuf;
   cerr<<unitbuf;
 
+  enableRawMode();
+
   while(true){
     cout<<"$ ";
-    string input;
-    getline(cin, input);
+    string input=readInput();
     if(input=="exit") break;
+    if(input.empty()) continue;
     if(input.substr(0, 5)=="echo "){
       if(input[5]=='\'' && input.find('>')==string::npos){
         int count=1;
@@ -685,4 +882,6 @@ int main() {
       }
     }
   }
+  disableRawMode(); // ALWAYS restore terminal before exiting!
+  return 0;
 }
