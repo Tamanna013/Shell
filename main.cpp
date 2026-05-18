@@ -17,8 +17,6 @@ namespace fs=filesystem;
 
 struct termios orig; // we'll store the original terminal settings here so we can restore them when we're done
 
-bool pastTab=false; // to track if the user presses tab key twice
-
 bool isExecutable(const std::string& filepath) {
     //access() returns 0 on success (has permission), -1 on failure
     return access(filepath.c_str(), X_OK) == 0;
@@ -62,6 +60,7 @@ void disableRawMode(){
 }
 
 vector<string> matches;
+bool previousTab=false;
 
 string checkIfTabComplete(string input){
   vector<string> commands={"echo", "cat", "pwd", "cd", "ls", "type", "exit"};
@@ -92,19 +91,21 @@ string checkIfTabComplete(string input){
   if(matches.size()==1){
     return matches[0];
   }
-  else{
-    cout<<'\a'<<endl;
+  else if(matches.size()==0){
+    return input;
   }
-  return input;
-}
-
-void handleTwoTabs(const string& input){
-  for(auto match:matches){
-    cout<<match<<" ";
+  string prefix=matches[0];
+  for(int i=1;i<matches.size();i++){
+    // If find(prefix) returns 0, it means prefix was found RIGHT AT THE START of the string.
+    while(matches[i].find(prefix)!=0){ // while current prefix is NOT a valid starting prefix of the current string
+      prefix.pop_back(); // this shortens the prefix until it becomes common to all strings.
+      // if prefix becomes empty then there is no common prefix at all so we return input else the prefix.
+      if(prefix.empty()){
+          return input;
+      }
+    }
   }
-  cout<<"\n$ "<<input;
-  matches.clear();
-  cout<<endl;
+  return prefix;
 }
 
 string readInput(){
@@ -180,31 +181,49 @@ string readInput(){
     }
 
     // ── TAB KEY ──
-    else if(c=='\t' && pastTab){
-      handleTwoTabs(input);
-      cout<<"$ "<<input;
-      pastTab=false;
-    }
     else if(c=='\t'){
-      string newInput=checkIfTabComplete(input);
-      if(input!=newInput){
-        // erase current input
-        for(int i=0;i<input.length();i++){
-          cout << "\b \b";
+      string newInput = checkIfTabComplete(input);
+      // no further completion possible
+      if(newInput == input){
+        // second TAB -> print all matches
+        if(previousTab && matches.size() > 1){
+          cout << "\n";
+          for(int i=0;i<matches.size();i++){
+            cout << matches[i];
+            if(i != matches.size()-1){
+              cout << "  ";
+            }
+          }
+          cout << "\n$ " << input;
+          cout.flush();
+          previousTab = false;
         }
-        cout<<newInput<<' ';
-        cout.flush();
-        input=newInput+' ';
-        pastTab=true;
+        else{
+          // first TAB -> bell
+          cout << "\a";
+          cout.flush();
+          previousTab = true;
+        }
+        continue;
       }
-      else{
-        pastTab=true;
-        // no match or multiple matches - ring bell
-        cout<<'\a'; // \a is the ASCII Bell character, which makes the terminal beep
-        cout.flush();
+      // since completion changed input we reset previousTab
+      previousTab = false;
+      for(int i=0;i<input.length();i++){
+        // \b  -> move cursor left
+        // ' ' -> overwrite character with space
+        // \b  -> move cursor left again
+        cout << "\b \b";
       }
+      input = newInput;
+      cout << input;
+      // trailing space only when unique match
+      if(matches.size() == 1){
+        cout << " ";
+        input += " ";
+      }
+      cout.flush();
     }
-
+    
     else{
       input+=c;
       cout<<c;
