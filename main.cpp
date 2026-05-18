@@ -88,12 +88,59 @@ int main() {
       }
       else if(input.find('>')!=string::npos){
         int pos=input.find('>');
-        if(input[pos-1]=='1') input.erase(pos-1, 1);
+        if(input[pos-1]=='1' && input[pos+1]=='>'){
+          string text=input.substr(5, pos-6);
+          while(!text.empty() && text.back()==' ') text.pop_back();
+          string filename=input.substr(pos+3);
+          while(!filename.empty() && filename.front()==' ') filename=filename.substr(1);
+          ofstream outFile(filename, ios::app);
+          if(outFile.is_open()){
+            outFile<<text<<"\n";
+            outFile.close();
+          }
+          continue;
+        }
+        else if(input[pos-1]=='1') input.erase(pos-1, 1);
+        else if(input[pos-1]=='2' && input[pos+1]=='>'){
+          string text=input.substr(5, pos-6);
+          while(!text.empty() && text.back()==' ') text.pop_back();
+          string filename=input.substr(pos+3);
+          while(!filename.empty() && filename.front()==' ') filename=filename.substr(1);
+          ofstream errFile(filename, ios::app); 
+          errFile.close();
+          cout<<text<<endl;
+          continue;
+        }
+        else if(input[pos-1]=='2'){
+          input.erase(pos-1, 1);
+          pos=pos-1;
+          string text=input.substr(5, pos-5);
+          string filename=input.substr(pos+2);
+          while(!text.empty() && text.back()==' ') text.pop_back();
+          while(!filename.empty() && filename.front()==' ') filename=filename.substr(1);
+          ofstream errFile(filename); //create empty stderr file
+          errFile.close();
+          cout<<text<<endl;
+          continue;
+        }
+        else if(input[pos+1]=='>'){
+          string text=input.substr(5, pos-6);
+          string filename=input.substr(pos+3);
+          ofstream outFile(filename, ios::app);
+          if(outFile.is_open()){
+            outFile<<text;
+            outFile.close();
+          }
+          else cerr<<"echo: "<<filename<<": No such file or directory"<<endl;
+          continue;
+        }
         string filename=input.substr(pos+1);
+        while(!filename.empty() && filename.front()==' ') filename=filename.substr(1);
         string text=input.substr(5, pos-6);
+        while(!text.empty() && text.back()==' ') text.pop_back();
         ofstream file(filename);
         if(file.is_open()){
-          file<<text;
+          file<<text<<endl;
           file.close();
         }
       }
@@ -120,6 +167,63 @@ int main() {
       if(input.find('>')!=string::npos){
         int pos=input.find('>');
         if(input[pos-1]=='1') input.erase(pos-1, 1);
+        else if(input[pos-1]=='2' && input[pos+1]=='>'){
+        string errFilename=input.substr(pos+3);  // output file
+        while(!errFilename.empty() && errFilename.front()==' ') errFilename=errFilename.substr(1);
+        string fname="";
+        vector<string> filenames;
+        for(int i=4;i<pos-1;i++){
+          if(input[i]==' '){
+            if(!fname.empty()) filenames.push_back(fname);
+              fname="";
+            }
+            else fname+=input[i];
+          }
+          if(!fname.empty()) filenames.push_back(fname);
+          ofstream errFile(errFilename, ios::app);
+          for(string& f: filenames){
+            ifstream inFile(f);
+            if(inFile.is_open()){
+              string content((istreambuf_iterator<char>(inFile)), istreambuf_iterator<char>());
+              cout<<content;
+              inFile.close();
+            }
+            else errFile<<"cat: "<<f<<": No such file or directory"<<endl;
+          }
+          errFile.close();
+          continue;
+        }
+        else if(input[pos-1]=='2'){
+          string filename="";
+          vector<string> filenames;
+          for(int i=4;i<pos-1;i++){
+            if(input[i]==' '){
+              if(!filename.empty()){
+                filenames.push_back(filename);
+              }
+              filename="";
+            }
+            else filename+=input[i];
+          }
+          if(!filename.empty()){
+            filenames.push_back(filename);
+          }
+          ofstream errFile(input.substr(pos+2), ios::app); //ios::app means "append mode", so instead of overwriting the file, it will add new content to the end of the file. This is important for stderr because you typically want to keep all error messages rather than just the last one.
+          sort(filenames.begin(), filenames.end());
+          for(string& fname: filenames){
+            ifstream inFile(fname);
+            if(inFile.is_open()){
+              string content((istreambuf_iterator<char>(inFile)), istreambuf_iterator<char>());
+              cout<<content;
+              inFile.close();
+            }
+            else{
+              errFile<<"cat: "<<fname<<": No such file or directory"<<endl;
+            }
+          }
+          errFile.close();
+          continue;
+        }
         pos=pos-1;
         string filename="";
         vector<string> filenames;
@@ -228,6 +332,61 @@ int main() {
       }
     }
     else if(input.substr(0, 5)=="ls -1"){
+      int pos=input.find('>');
+      if(input[pos-1]=='2' && input[pos+1]=='>'){
+        int pos=input.find('>');
+        string filename=input.substr(pos+3);
+        while(!filename.empty() && filename.front()==' ') filename=filename.substr(1);
+        string dirname=input.substr(6, pos-7);
+        while(!dirname.empty() && dirname.back()==' ') dirname.pop_back();
+        ofstream errFile(filename, ios::app); //always create the output file first
+        if(!fs::exists(dirname)){
+          errFile<<"ls: "<<dirname<<": No such file or directory"<<endl;
+          errFile.close();
+          continue;
+        }
+        vector<string> files;
+        for(const auto& entry : fs::directory_iterator(dirname)){
+          files.push_back(entry.path().filename().string());
+        }
+        sort(files.begin(), files.end());
+        for(const auto& file: files){
+          errFile<<file<<endl;
+        }
+        errFile.close();
+        continue;
+      }
+      else if(input[pos-1]=='2'){
+        input.erase(pos-1, 1);
+        pos=pos-1;
+        string filename=input.substr(pos+2);
+        ofstream errFile(filename);
+        errFile<<"ls: "<<input.substr(6, pos-7)<<": No such file or directory"<<endl;
+        errFile.close();
+        continue;
+      }
+      else if(input[pos+1]=='>'){
+        string filename=input.substr(pos+3);
+        while(!filename.empty() && filename.front()==' ') filename=filename.substr(1);
+        string dirname=input.substr(6, pos-7);
+        while(!dirname.empty() && dirname.back()==' ') dirname.pop_back();
+        ofstream outFile(filename, ios::app);
+        if(!fs::exists(dirname)){
+          cerr<<"ls: "<<dirname<<": No such file or directory"<<endl;
+          outFile.close();
+          continue;
+        }
+        vector<string> files;
+        for(const auto& entry : fs::directory_iterator(dirname)){
+          files.push_back(entry.path().filename().string());
+        }
+        sort(files.begin(), files.end());
+        for(const auto& file: files){
+          outFile<<file<<endl;
+        }
+        outFile.close();
+        continue;
+      }
       string filename="";
       int i=5;
       while(input[i]!='>' && i<input.length()){
@@ -250,7 +409,6 @@ int main() {
         if(file!=files.back()) text += file + "\n";
         else text += file;
       }
-      int pos=input.find('>');
       if(pos!=string::npos){
         string newfilename=input.substr(pos+2);
         ofstream newfile(newfilename);
@@ -264,6 +422,61 @@ int main() {
         if(!text.empty()) text.pop_back();
         cout << text;
       }
+    }
+    else if(input.substr(0, 3)=="ls "){
+      int pos=input.find('>');
+      if(pos!=string::npos){
+        if(input[pos-1]=='1') input.erase(pos-1, 1);
+        else if(input[pos-1]=='2' && input[pos+1]=='>'){
+          string dirname=input.substr(3, pos-4);
+          while(!dirname.empty() && dirname.back()==' ') dirname.pop_back();
+          string filename=input.substr(pos+3);
+          while(!filename.empty() && filename.front()==' ') filename=filename.substr(1);
+          ofstream errFile(filename, ios::app);
+          if(!fs::exists(dirname)){
+            errFile<<"ls: "<<dirname<<": No such file or directory"<<endl;
+            errFile.close();
+            continue;
+          }
+          for(const auto& entry : fs::directory_iterator(dirname)){
+            cout<<entry.path().filename().string()<<"\n";
+          }
+          errFile.close();
+          continue;
+        }
+        else if(input[pos+1]=='>'){
+          string dirname=input.substr(3, pos-4);
+          while(!dirname.empty() && dirname.back()==' ') dirname.pop_back();
+          string filename=input.substr(pos+3);
+          while(!filename.empty() && filename.front()==' ') filename=filename.substr(1);
+          vector<string> files;
+          try{
+            for (const auto& entry : fs::directory_iterator(dirname)) {
+              files.push_back(entry.path().filename().string());
+            }
+            sort(files.begin(), files.end());
+            ofstream outFile(filename, ios::app);
+            for(const auto& file: files){
+              outFile<<file<<endl;
+            }
+            outFile.close();
+          }
+          catch(const fs::filesystem_error& e){
+            cerr<<"ls: "<<dirname<<": No such file or directory"<<endl;
+          }
+        }
+      }
+      string filename=input.substr(3);
+      if(filename=="~") filename=getenv("HOME");
+      try{
+        for (const auto& entry : fs::directory_iterator(filename)) {
+          std::cout << entry.path().filename().string() << std::endl;
+        }
+      }
+      catch(const fs::filesystem_error& e){
+        cerr<<"ls: "<<filename<<": No such file or directory"<<endl;
+      }
+      continue;
     }
     else if(input.substr(0, 5)=="type "){
       string cmd=input.substr(5);
